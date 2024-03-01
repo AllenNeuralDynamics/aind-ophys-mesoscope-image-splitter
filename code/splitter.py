@@ -1539,8 +1539,7 @@ class TiffSplitterCLI:
             write_out_stitched_full_field_image(
                 path_to_avg_tiff=Path(avg_path),
                 path_to_full_field_tiff=full_field_path,
-                output_path=output_path,
-                logger=logging,
+                output_path=output_path
             )
 
             if output_path.is_file():
