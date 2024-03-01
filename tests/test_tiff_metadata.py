@@ -2,7 +2,9 @@ import pytest
 import copy
 from unittest.mock import patch, Mock
 import pathlib
-from mesoscope_file_splitter.tiff_metadata import ScanImageMetadata
+
+from mesoscope_file_splitter.tiff_metadata import (
+    ScanImageMetadata)
 from mesoscope_file_splitter.splitter import mkstemp_clean
 
 
@@ -305,8 +307,7 @@ def test_defined_rois(
         [2.1, (1, 2, 3), [1, 2, 3], 'abcde'])
 def test_numVolumes_errors(
         wrong_numVolumes,
-        tmpdir_factory,
-        ):
+        tmpdir_factory):
     """
     Test that errors are raised when
     SI.hStackManager.actualNumVolumes is not an int
@@ -322,16 +323,13 @@ def test_numVolumes_errors(
         with pytest.raises(ValueError, match='expected int'):
             obj.numVolumes
 
-    #.clean_up_dir(tmpdir=tmpdir)
-
 
 @pytest.mark.parametrize(
         "wrong_numSlices",
         [2.1, (1, 2, 3), [1, 2, 3], 'abcde'])
 def test_numSlices_errors(
         wrong_numSlices,
-        tmpdir_factory,
-        ):
+        tmpdir_factory):
     """
     Test that errors are raised when
     SI.hStackManager.actualNumSlices is not an int
@@ -347,12 +345,9 @@ def test_numSlices_errors(
         with pytest.raises(ValueError, match='expected int'):
             obj.numSlices
 
-    #.clean_up_dir(tmpdir=tmpdir)
-
 
 def test_roi_size(
-        tmpdir_factory,
-        ):
+        tmpdir_factory):
     """
     Test that ScanImageMetadata.roi_size returns expected values
     """
@@ -386,12 +381,9 @@ def test_roi_size(
     with pytest.raises(ValueError, match="there are only 3"):
         tiff_metadata.roi_size(3)
 
-    #.clean_up_dir(tmpdir)
-
 
 def test_roi_size_errors(
-        tmpdir_factory,
-        ):
+        tmpdir_factory):
     """
     Test that ScanImageMetadata.roi_size returns errors when scanfields
     have inconsistent sizes
@@ -445,12 +437,9 @@ def test_roi_size_errors(
         with pytest.raises(RuntimeError, match="either a list or a dict"):
             tiff_metadata.roi_size(1)
 
-    #.clean_up_dir(tmpdir)
-
 
 def test_roi_resolution(
-        tmpdir_factory,
-        ):
+        tmpdir_factory):
     """
     Test that ScanImageMetadata.roi_resolution returns expected values
     """
@@ -484,12 +473,9 @@ def test_roi_resolution(
     with pytest.raises(ValueError, match="there are only 3"):
         tiff_metadata.roi_size(3)
 
-    #.clean_up_dir(tmpdir)
-
 
 def test_roi_resolution_errors(
-        tmpdir_factory,
-        ):
+        tmpdir_factory):
     """
     Test that ScanImageMetadata.roi_size returns errors when scanfields
     have inconsistent sizes
@@ -542,5 +528,3 @@ def test_roi_resolution_errors(
         tiff_metadata = ScanImageMetadata(tiff_path=tmp_path)
         with pytest.raises(RuntimeError, match="either a list or a dict"):
             tiff_metadata.roi_resolution(1)
-
-    #.clean_up_dir(tmpdir)
