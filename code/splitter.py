@@ -10,17 +10,21 @@ from pathlib import Path
 import shutil
 import tempfile
 import datetime
+import argparse
 
 from aind_ophys_utils.array_utils import normalize_array
 from mesoscope_file_splitter.tiff_metadata import ScanImageMetadata
-from mesoscope_file_splitter.full_field_utils import write_out_stitched_full_field_image, get_full_field_path
+from mesoscope_file_splitter.full_field_utils import (
+    write_out_stitched_full_field_image,
+    get_full_field_path,
+)
 
 
 def mkstemp_clean(
     dir: Optional[Union[Path, str]] = None,
     prefix: Optional[str] = None,
     suffix: Optional[str] = None,
-) -> str:   
+) -> str:
     """
     A thin wrapper around tempfile mkstemp that automatically
     closes the file descripter returned by mkstemp.
@@ -1337,16 +1341,24 @@ def get_nearest_roi_center(
 
 
 class TiffSplitterCLI:
-    def __init__(self, storage_path: Path, temp_dir: Path):
+    def __init__(self, storage_path: Union[Path, str], temp_dir: Optional[Union[Path, str]] = None):
         self.storage_path = storage_path
+        if isinstance(self.storage_path, str):
+            self.storage_path = Path(self.storage_path)
         session_json = next(self.storage_path.glob("*session.json"), None)
         if not session_json:
             raise ValueError("No session.json file found")
         with open(session_json, "r") as f:
             self.session_data = json.load(f)
-        self.timeseries_tif = next(self.storage_path.glob("*timeseries_tif.tif"), None)
-        self.depths_tif = next(self.storage_path.glob("*depths_tif.tif"), None)
-        self.surface_tif = next(self.storage_path.glob("*surface_tif.tif"), None)
+        self.timeseries_tif = next(self.storage_path.glob("*timeseries.tiff"), None)
+        if not self.timeseries_tif:
+            raise ValueError("No timeseries.tiff file found")
+        self.depths_tif = next(self.storage_path.glob("*averaged_depth.tiff"), None)
+        if not self.depths_tif:
+            raise ValueError("No averaged_depth.tiff file found")
+        self.surface_tif = next(self.storage_path.glob("*averaged_surface.tiff"), None)
+        if not self.surface_tif:
+            raise ValueError("No averaged_surface.tiff file found")
         self.temp_dir = temp_dir
 
     def run_job(self):
@@ -1367,8 +1379,8 @@ class TiffSplitterCLI:
         files_to_record.append(surface_path)
 
         zstack_path_list = []
-        for plane_grp in self.session_data.get("plane_groups", []):
-            zstack_path = Path(plane_grp["local_z_stack_tif"])
+        for zstack in self.storage_path.glob("*local_z*.tiff"):
+            zstack_path = zstack
             zstack_path_list.append(zstack_path)
             files_to_record.append(zstack_path)
 
@@ -1384,11 +1396,10 @@ class TiffSplitterCLI:
         # having to modify the ruby strategy associated with this
         # queue, which is out of scope for the work we have
         # currently committed to.
-        for plane_group in self.session_data.get("plane_groups", []):
-            if "column_z_stack_tif" in plane_group:
-                msg = "'column_z_stack_tif' detected in 'plane_groups'; "
-                msg += "the TIFF splitting code no longer handles that file."
-                logging.warning(msg)
+        if self.storage_path.glob("*cortical_z_stack*.tiff"):
+            msg = "'column_z_stack_tif' detected in 'plane_groups'; "
+            msg += "the TIFF splitting code no longer handles that file."
+            logging.warning(msg)
 
         # There are cases where the centers for ROIs are not
         # exact across modalities, so we cannot demand that the
@@ -1400,93 +1411,102 @@ class TiffSplitterCLI:
         valid_roi_centers = get_valid_roi_centers(timeseries_splitter=timeseries_splitter)
 
         experiment_metadata = []
-        for plane_group in self.session_data.get("plane_groups", []):
-            for experiment in plane_group["ophys_experiments"]:
-                this_exp_metadata = dict()
-                exp_id = experiment["experiment_id"]
-                this_exp_metadata["experiment_id"] = exp_id
-                for file_key in ("timeseries", "depth_2p", "surface_2p", "local_z_stack"):
-                    this_metadata = dict()
-                    for data_key in ("offset_x", "offset_y", "rotation", "resolution"):
-                        this_metadata[data_key] = experiment[data_key]
-                    this_exp_metadata[file_key] = this_metadata
+        for data_stream in self.session_data["data_streams"]:
+            if data_stream.get("ophys_fovs"):
+                for fov in data_stream["ophys_fovs"]:
+                    this_exp_metadata = dict()
+                    fov_id = f'{fov["targeted_structure"]}_{fov["index"]}'
+                    this_exp_metadata["fov"] = fov_id
+                    for file_key in ("timeseries", "depth_2p", "surface_2p", "local_z_stack"):
+                        this_metadata = dict()
+                        for data_key in (
+                            "fov_coordinate_ml",
+                            "fov_coordinate_ap",
+                            "fov_reference",
+                            "scanimage_resolution",
+                        ):
+                            this_metadata[data_key] = fov[data_key]
+                        this_exp_metadata[file_key] = this_metadata
 
-                experiment_dir = Path(experiment["storage_directory"])
-                experiment_id = experiment["experiment_id"]
-                roi_index = experiment["roi_index"]
-                scanfield_z = experiment["scanfield_z"]
-                baseline_center = None
+                    fov_directory = self.storage_path
+                    roi_index = fov["scanimage_roi_index"]
+                    scanfield_z = fov["scanfield_z"]
+                    baseline_center = None
 
-                for splitter, z_value, output_name, metadata_tag in zip(
-                    (depth_splitter, surface_splitter, zstack_splitter),
-                    (scanfield_z, None, scanfield_z),
-                    (
-                        f"{experiment_id}_depth.tif",
-                        f"{experiment_id}_surface.tif",
-                        f"{experiment_id}_z_stack_local.h5",
-                    ),
-                    ("depth_2p", "surface_2p", "local_z_stack"),
-                ):
-                    output_path = experiment_dir / output_name
-                    roi_center = splitter.roi_center(i_roi=roi_index)
-                    nearest_valid = get_nearest_roi_center(
-                        this_roi_center=roi_center, valid_roi_centers=valid_roi_centers
-                    )
-                    if baseline_center is None:
-                        baseline_center = nearest_valid
+                    for splitter, z_value, output_name, metadata_tag in zip(
+                        (depth_splitter, surface_splitter, zstack_splitter),
+                        (scanfield_z, None, scanfield_z),
+                        (
+                            f"{fov_id}_depth.tif",
+                            f"{fov_id}_surface.tif",
+                            f"{fov_id}_z_stack_local.h5",
+                        ),
+                        ("depth_2p", "surface_2p", "local_z_stack"),
+                    ):
+                        output_dir = fov_directory / fov_id
+                        if not output_dir.is_dir():
+                            output_dir.mkdir()
+                        output_path = output_dir / output_name
+                        roi_center = splitter.roi_center(i_roi=roi_index)
+                        nearest_valid = get_nearest_roi_center(
+                            this_roi_center=roi_center, valid_roi_centers=valid_roi_centers
+                        )
+                        if baseline_center is None:
+                            baseline_center = nearest_valid
 
-                    if nearest_valid != baseline_center:
-                        msg = f"experiment {experiment_id}\n"
-                        msg += "roi center inconsistent for "
-                        msg += "input: "
-                        msg += f"{splitter.input_path.resolve().absolute()}\n"
-                        msg += "output: "
-                        msg += f"{output_path.resolve().absolute()}\n"
-                        msg += f"{baseline_center}; {roi_center}\n"
-                        raise RuntimeError(msg)
-                    splitter.write_output_file(
-                        i_roi=roi_index, z_value=z_value, output_path=output_path
-                    )
-                    str_path = str(output_path.resolve().absolute())
-                    this_exp_metadata[metadata_tag]["filename"] = str_path
-                    frame_shape = splitter.frame_shape(i_roi=roi_index, z_value=z_value)
-                    this_exp_metadata[metadata_tag]["height"] = frame_shape[0]
-                    this_exp_metadata[metadata_tag]["width"] = frame_shape[1]
+                        if nearest_valid != baseline_center:
+                            msg = f"experiment {fov_id}\n"
+                            msg += "roi center inconsistent for "
+                            msg += "input: "
+                            msg += f"{splitter.input_path.resolve().absolute()}\n"
+                            msg += "output: "
+                            msg += f"{output_path.resolve().absolute()}\n"
+                            msg += f"{baseline_center}; {roi_center}\n"
+                            raise RuntimeError(msg)
+                        splitter.write_output_file(
+                            i_roi=roi_index, z_value=z_value, output_path=output_path
+                        )
+                        str_path = str(output_path.resolve().absolute())
+                        this_exp_metadata[metadata_tag]["filename"] = str_path
+                        frame_shape = splitter.frame_shape(i_roi=roi_index, z_value=z_value)
+                        this_exp_metadata[metadata_tag]["height"] = frame_shape[0]
+                        this_exp_metadata[metadata_tag]["width"] = frame_shape[1]
 
-                    elapsed_time = time.time() - t0
+                        elapsed_time = time.time() - t0
 
-                    logging.info(
-                        "wrote "
-                        f"{output_path.resolve().absolute()} "
-                        f"after {elapsed_time:.2e} seconds"
-                    )
+                        logging.info(
+                            "wrote "
+                            f"{output_path.resolve().absolute()} "
+                            f"after {elapsed_time:.2e} seconds"
+                        )
 
-                experiment_metadata.append(this_exp_metadata)
+                    experiment_metadata.append(this_exp_metadata)
 
         # because the timeseries TIFFs are so big, we split
         # them differently to avoid reading through the TIFFs
         # more than once
 
         output_path_lookup = dict()
-        for plane_group in self.session_data.get("plane_groups", []):
-            for experiment in plane_group["ophys_experiments"]:
-                exp_id = experiment["experiment_id"]
-                scanfield_z = experiment["scanfield_z"]
-                roi_index = experiment["roi_index"]
-                experiment_dir = Path(experiment["storage_directory"])
-                fname = f"{exp_id}.h5"
-                output_path = experiment_dir / fname
-                output_path_lookup[(roi_index, scanfield_z)] = output_path
+        for data_stream in self.session_data["data_streams"]:
+            if data_stream.get("ophys_fovs"):
+                for fov in data_stream["ophys_fovs"]:
+                    fov_id = f'{fov["targeted_structure"]}_{fov["index"]}'
+                    scanfield_z = fov["scanfield_z"]
+                    roi_index = fov["scanimage_roi_index"]
+                    fov_directory = self.storage_path
+                    fname = f"{fov_id}.h5"
+                    output_path = fov_directory / fov_id / fname
+                    output_path_lookup[(roi_index, scanfield_z)] = output_path
 
-                frame_shape = timeseries_splitter.frame_shape(i_roi=roi_index, z_value=scanfield_z)
+                    frame_shape = timeseries_splitter.frame_shape(i_roi=roi_index, z_value=scanfield_z)
 
-                str_path = str(output_path.resolve().absolute())
+                    str_path = str(output_path.resolve().absolute())
 
-                for metadata in experiment_metadata:
-                    if metadata["experiment_id"] == exp_id:
-                        metadata["timeseries"]["height"] = frame_shape[0]
-                        metadata["timeseries"]["width"] = frame_shape[1]
-                        metadata["timeseries"]["filename"] = str_path
+                    for metadata in experiment_metadata:
+                        if metadata["fov"] == fov:
+                            metadata["timeseries"]["height"] = frame_shape[0]
+                            metadata["timeseries"]["width"] = frame_shape[1]
+                            metadata["timeseries"]["filename"] = str_path
         timeseries_splitter.write_output_files(
             output_path_map=output_path_lookup,
             tmp_dir=self.temp_dir,
@@ -1504,20 +1524,15 @@ class TiffSplitterCLI:
 
         output["ready_to_archive"] = list(ready_to_archive)
 
-        full_field_path = get_full_field_path(runner_args=self.args, logger=logging)
+        # TODO: why not just search for the file in the storage_path?
+        # full_field_path = get_full_field_path(runner_args=self.args, logger=logging)
+        full_field_path = self.storage_path.glob("*fullfield*.tiff")
 
         if full_field_path is not None:
             avg_path = self.surface_tif
-            output_dir = Path(self.output_dir)
+            output_dir = self.storage_path
 
-            session_id = self.args["session_id"]
-
-            # get session_id from the name of the directory where
-            # the output files are being written
-            if session_id is None:
-                session_id = output_dir.name.split("_")[-1]
-
-            output_name = f"{session_id}_stitched_full_field_img.h5"
+            output_name = "stitched_full_field_img.h5"
             output_path = output_dir / output_name
             logging.info(f"Writing {output_path.resolve().absolute()}")
 
@@ -1547,7 +1562,12 @@ class TiffSplitterCLI:
         duration = time.time() - t0
         logging.info(f"that took {duration:.2e} seconds")
 
+    def parse_args(self):
+        parser = argparse.ArgumentParser()
+        parser.add_argument("storage_path", type=str)
+        parser.add_argument
+
 
 if __name__ == "__main__":
-    runner = TiffSplitterCLI()
-    runner.run()
+    runner = TiffSplitterCLI("D:/1330132892", temp_dir="D:/tmp")
+    runner.run_job()
