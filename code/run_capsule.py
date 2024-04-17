@@ -13,8 +13,8 @@ import datetime
 import argparse
 
 from aind_ophys_utils.array_utils import normalize_array
-from mesoscope_file_splitter.tiff_metadata import ScanImageMetadata
-from mesoscope_file_splitter.full_field_utils import (
+from tiff_metadata import ScanImageMetadata
+from full_field_utils import (
     write_out_stitched_full_field_image,
     get_full_field_path,
 )

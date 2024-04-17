@@ -10,7 +10,7 @@ import logging
 import h5py as h5
 
 from aind_ophys_utils.array_utils import normalize_array
-from mesoscope_file_splitter.tiff_metadata import ScanImageMetadata
+from tiff_metadata import ScanImageMetadata
 
 
 def write_out_stitched_full_field_image(
