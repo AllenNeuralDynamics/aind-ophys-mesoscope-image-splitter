@@ -12,8 +12,5 @@ if [ -z "$SUB_DIR" ]; then
     exit 1
 fi
 
-# Construct the JSON string
-JSON_STRING='{"storage_path":"'"$SUB_DIR"'","tmp_dir":"../scratch"}'
-echo $JSON_STRING
-
-# python -u run_capsule.py --job-settings "$JSON_STRING"
+echo $SUB_DIR
+python -u run_capsule.py --data-dir $SUB_DIR --temp-dir ../scratch
