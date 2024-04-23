@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -ex
 
-# Define the root directory
 ROOT_DIR="../data"
 
 # Find the subdirectory
@@ -17,4 +16,4 @@ fi
 JSON_STRING='{"storage_path":"'"$SUB_DIR"'","tmp_dir":"../scratch"}'
 echo $JSON_STRING
 
-python -u run_capsule.py --job-settings "$JSON_STRING"
+# python -u run_capsule.py --job-settings "$JSON_STRING"
