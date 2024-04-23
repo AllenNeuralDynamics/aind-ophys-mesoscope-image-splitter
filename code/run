@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 set -ex
 
-# This is the master script for the capsule. When you click "Reproducible Run", the code in this file will execute.
-python -u run_capsule.py "$@"
+# Define the root directory
+ROOT_DIR="../data"
+
+# Find the subdirectory
+SUB_DIR=$(find "$ROOT_DIR" -type d -name "multiplane-ophys*" -exec test -d '{}/ophys' \; -print -quit)
+
+# Check if subdirectory exists
+if [ -z "$SUB_DIR" ]; then
+    echo "Subdirectory not found in $ROOT_DIR"
+    exit 1
+fi
+
+# Construct the JSON string
+JSON_STRING='{"storage_path":"'"$SUB_DIR"'","tmp_dir":"../scratch"}'
+echo $JSON_STRING
+
+#python -u run_capsule.py --job-settings "$JSON_STRING"
