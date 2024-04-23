@@ -1,4 +1,4 @@
-# hash:sha256:96e9f1462b2bd25613c91599be08d46939f509a85280e4bd26e40ef94fa0b865
+# hash:sha256:98b6e64c933a2c0018e09e81f4d9c15f513efc22af79a8b814dd801ddb267c25
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
@@ -15,6 +15,8 @@ RUN pip install -U --no-cache-dir \
     numpy==1.24.4 \
     pandas==2.0.3 \
     pillow==10.2.0 \
+    pydantic \
+    pydantic-settings \
     pytz==2024.1 \
     scikit-image==0.21.0 \
     scipy==1.10.1 \
