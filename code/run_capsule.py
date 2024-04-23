@@ -1582,23 +1582,35 @@ class TiffSplitterCLI:
 
         parser = argparse.ArgumentParser()
         parser.add_argument(
-            "-u",
-            "--job-settings",
+            "-d",
+            "--data-dir",
             required=True,
-            type=json.loads,
+            type=str,
             help=(
-                r"""
-                Custom settings defined by the user defined as a json
-                 string. For example: -u
-                 '{"storage_path":"../data",
-                 "tmp_dir":"../scratch""}
+                """
+                data-directory for job settings
+                """
+            ),
+        )
+        parser.add_argument(
+            "-t",
+            "--temp-dir",
+            required=False,
+            default=None,
+            type=str,
+            help=(
+                """
+                temp-directory for job settings
                 """
             ),
         )
         job_args = parser.parse_args(args)
-        job_settings_from_args = JobSettings(**job_args.job_settings)
+        job_settings=JobSettings(
+            source_directory=job_args.data_dir,
+            temp_dir=job_args.temp_dir
+        )
         return cls(
-            job_settings=job_settings_from_args,
+            job_settings=job_settings,
         )
 
 
