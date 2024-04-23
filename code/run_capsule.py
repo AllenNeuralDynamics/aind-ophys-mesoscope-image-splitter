@@ -1354,7 +1354,7 @@ class TiffSplitterCLI:
         
         if isinstance(self.storage_path, str):
             self.storage_path = Path(self.storage_path)
-        session_json = next(self.storage_path.glob("*session.json"), None)
+        session_json = next(self.storage_path.parent.glob("*session.json"), None)
         if not session_json:
             raise ValueError("No session.json file found")
         with open(session_json, "r") as f:
@@ -1606,7 +1606,7 @@ class TiffSplitterCLI:
         )
         job_args = parser.parse_args(args)
         job_settings=JobSettings(
-            source_directory=job_args.data_dir,
+            storage_path=job_args.data_dir,
             temp_dir=job_args.temp_dir
         )
         return cls(

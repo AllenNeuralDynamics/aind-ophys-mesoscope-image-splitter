@@ -4,7 +4,6 @@ import copy
 import pathlib
 import numpy as np
 
-
 def _read_metadata(tiff_path: pathlib.Path):
     """
     Calls tifffile.read_scanimage_metadata on the specified
