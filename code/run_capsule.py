@@ -11,6 +11,9 @@ import shutil
 import tempfile
 import datetime
 import argparse
+from pydantic import Field
+from pydantic_settings import BaseSettings
+import sys
 
 from aind_ophys_utils.array_utils import normalize_array
 from tiff_metadata import ScanImageMetadata
@@ -1339,10 +1342,16 @@ def get_nearest_roi_center(
 
     return ans
 
+class JobSettings(BaseSettings):
+    """Job settings values."""
+
+    storage_path: Union[Path, str] = Field(description="directory where tiff files are found")
+    temp_dir: Optional[Path]
 
 class TiffSplitterCLI:
-    def __init__(self, storage_path: Union[Path, str], temp_dir: Optional[Union[Path, str]] = None):
-        self.storage_path = storage_path
+    def __init__(self, job_settings=JobSettings):
+        self.storage_path = job_settings.storage_path
+        
         if isinstance(self.storage_path, str):
             self.storage_path = Path(self.storage_path)
         session_json = next(self.storage_path.glob("*session.json"), None)
@@ -1359,7 +1368,7 @@ class TiffSplitterCLI:
         self.surface_tif = next(self.storage_path.glob("*averaged_surface.tiff"), None)
         if not self.surface_tif:
             raise ValueError("No averaged_surface.tiff file found")
-        self.temp_dir = temp_dir
+        self.temp_dir = job_settings.temp_dir
 
     def run_job(self):
         t0 = time.time()
@@ -1561,12 +1570,39 @@ class TiffSplitterCLI:
         duration = time.time() - t0
         logging.info(f"that took {duration:.2e} seconds")
 
-    def parse_args(self):
+    @classmethod
+    def from_args(cls, args: list):
+        """
+        Adds ability to construct settings from a list of arguments.
+        Parameters
+        ----------
+        args : list
+        A list of command line arguments to parse.
+        """
+
         parser = argparse.ArgumentParser()
-        parser.add_argument("storage_path", type=str)
-        parser.add_argument
+        parser.add_argument(
+            "-u",
+            "--job-settings",
+            required=True,
+            type=json.loads,
+            help=(
+                r"""
+                Custom settings defined by the user defined as a json
+                 string. For example: -u
+                 '{"storage_path":"../data",
+                 "tmp_dir":"../scratch""}
+                """
+            ),
+        )
+        job_args = parser.parse_args(args)
+        job_settings_from_args = JobSettings(**job_args.job_settings)
+        return cls(
+            job_settings=job_settings_from_args,
+        )
 
 
 if __name__ == "__main__":
-    runner = TiffSplitterCLI("D:/1330132892", temp_dir="D:/tmp")
+    sys_args = sys.argv[1:]
+    runner = TiffSplitterCLI.from_args(sys_args)
     runner.run_job()

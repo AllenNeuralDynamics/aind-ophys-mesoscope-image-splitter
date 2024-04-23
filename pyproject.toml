@@ -21,7 +21,9 @@ dependencies = [
     "h5py==3.10.0",
     "numpy==1.26.4",
     "scikit-image==0.22.0",
-    "tifffile==2024.2.12"
+    "tifffile==2024.2.12", 
+    "pydantic",
+    "pydantic-settings"
 ]
 
 [project.optional-dependencies]
