@@ -1432,7 +1432,7 @@ class TiffSplitterCLI:
                             "fov_coordinate_ml",
                             "fov_coordinate_ap",
                             "fov_reference",
-                            "scanimage_resolution",
+                            "fov_scale_factor",
                         ):
                             this_metadata[data_key] = fov[data_key]
                         this_exp_metadata[file_key] = this_metadata
