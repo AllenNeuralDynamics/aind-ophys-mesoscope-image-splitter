@@ -1347,13 +1347,16 @@ class JobSettings(BaseSettings):
 
     storage_path: Union[Path, str] = Field(description="directory where tiff files are found")
     temp_dir: Optional[Path]
+    output_dir: Union[Path, str] 
 
 class TiffSplitterCLI:
     def __init__(self, job_settings=JobSettings):
         self.storage_path = job_settings.storage_path
-        
         if isinstance(self.storage_path, str):
             self.storage_path = Path(self.storage_path)
+        self.output_dir = job_settings.output_dir
+        if isinstance(self.output_dir, str):
+            self.output_dir = Path(self.output_dir)
         session_json = next(self.storage_path.glob("*session.json"), None)
         if not session_json:
             raise ValueError("No session.json file found")
@@ -1437,7 +1440,6 @@ class TiffSplitterCLI:
                             this_metadata[data_key] = fov[data_key]
                         this_exp_metadata[file_key] = this_metadata
 
-                    fov_directory = self.storage_path
                     roi_index = fov["scanimage_roi_index"]
                     scanfield_z = fov["scanfield_z"]
                     baseline_center = None
@@ -1452,7 +1454,7 @@ class TiffSplitterCLI:
                         ),
                         ("depth_2p", "surface_2p", "local_z_stack"),
                     ):
-                        output_dir = fov_directory / fov_id
+                        output_dir = self.output_dir / fov_id
                         if not output_dir.is_dir():
                             output_dir.mkdir()
                         output_path = output_dir / output_name
@@ -1502,7 +1504,7 @@ class TiffSplitterCLI:
                     fov_id = f'{fov["targeted_structure"]}_{fov["index"]}'
                     scanfield_z = fov["scanfield_z"]
                     roi_index = fov["scanimage_roi_index"]
-                    fov_directory = self.storage_path
+                    fov_directory = self.output_dir
                     fname = f"{fov_id}.h5"
                     output_path = fov_directory / fov_id / fname
                     output_path_lookup[(roi_index, scanfield_z)] = output_path
