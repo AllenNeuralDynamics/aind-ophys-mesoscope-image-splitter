@@ -13,4 +13,4 @@ if [ -z "$SUB_DIR" ]; then
 fi
 
 echo $SUB_DIR
-python -u run_capsule.py --data-dir $SUB_DIR --temp-dir ../scratch
+python -u run_capsule.py --data-dir $SUB_DIR --temp-dir ../scratch --output-dir ../results

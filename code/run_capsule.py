@@ -1606,10 +1606,23 @@ class TiffSplitterCLI:
                 """
             ),
         )
+        parser.add_argument(
+            "-o",
+            "--output-dir",
+            required=True,
+            default=None,
+            type=str,
+            help=(
+                """
+                temp-directory for job settings
+                """
+            ),
+        )
         job_args = parser.parse_args(args)
         job_settings=JobSettings(
             storage_path=job_args.data_dir,
-            temp_dir=job_args.temp_dir
+            temp_dir=job_args.temp_dir,
+            output_dir=job_args.output_dir
         )
         return cls(
             job_settings=job_settings,
