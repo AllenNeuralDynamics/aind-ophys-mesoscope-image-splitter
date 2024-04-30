@@ -1608,7 +1608,7 @@ class TiffSplitterCLI:
         )
         job_args = parser.parse_args(args)
         job_settings=JobSettings(
-            source_directory=job_args.data_dir,
+            storage_path=job_args.data_dir,
             temp_dir=job_args.temp_dir
         )
         return cls(
