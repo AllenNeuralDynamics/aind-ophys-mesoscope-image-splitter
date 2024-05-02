@@ -2,6 +2,7 @@ from typing import List, Tuple, Optional, Dict, Union
 import tifffile
 import numpy as np
 import h5py as h5
+import sys
 import json
 import os
 import time
@@ -11,9 +12,8 @@ import shutil
 import tempfile
 import datetime
 import argparse
-from pydantic import Field
-from pydantic_settings import BaseSettings
-import sys
+from pydantic import Field, BaseModel
+
 
 from aind_ophys_utils.array_utils import normalize_array
 from tiff_metadata import ScanImageMetadata
@@ -364,7 +364,6 @@ def _gather_timeseries_caches(
 
     if chunk_size > max_chunk_size:
         chunk_size = max_chunk_size
-
     with h5.File(final_output_path, "w") as out_file:
         if metadata is not None:
             serialized_metadata = json.dumps(metadata).encode("utf-8")
@@ -1342,33 +1341,34 @@ def get_nearest_roi_center(
 
     return ans
 
-class JobSettings(BaseSettings):
+class JobSettings(BaseModel):
     """Job settings values."""
 
-    storage_path: Union[Path, str] = Field(description="directory where tiff files are found")
+    input_dir: Union[Path, str] = Field(description="directory where tiff files are found")
     temp_dir: Optional[Path]
-    output_dir: Union[Path, str] 
+    output_dir: Union[Path, str] = Field(description="where to save fovs")
 
 class TiffSplitterCLI:
-    def __init__(self, job_settings=JobSettings):
-        self.storage_path = job_settings.storage_path
-        if isinstance(self.storage_path, str):
-            self.storage_path = Path(self.storage_path)
+    # def __init__(self, storage_path: Union[Path, str], temp_dir: Optional[Union[Path, str]] = None):
+    def __init__(self, job_settings: JobSettings):
+        self.input_dir = job_settings.input_dir
+        if isinstance(self.input_dir, str):
+            self.input_dir = Path(self.input_dir)
         self.output_dir = job_settings.output_dir
         if isinstance(self.output_dir, str):
             self.output_dir = Path(self.output_dir)
-        session_json = next(self.storage_path.glob("*session.json"), None)
+        session_json = next(self.input_dir.parent.glob("*session.json"), None)
         if not session_json:
             raise ValueError("No session.json file found")
         with open(session_json, "r") as f:
             self.session_data = json.load(f)
-        self.timeseries_tif = next(self.storage_path.glob("*timeseries.tiff"), None)
+        self.timeseries_tif = next(self.input_dir.glob("*timeseries.tiff"), None)
         if not self.timeseries_tif:
             raise ValueError("No timeseries.tiff file found")
-        self.depths_tif = next(self.storage_path.glob("*averaged_depth.tiff"), None)
+        self.depths_tif = next(self.input_dir.glob("*averaged_depth.tiff"), None)
         if not self.depths_tif:
             raise ValueError("No averaged_depth.tiff file found")
-        self.surface_tif = next(self.storage_path.glob("*averaged_surface.tiff"), None)
+        self.surface_tif = next(self.input_dir.glob("*averaged_surface.tiff"), None)
         if not self.surface_tif:
             raise ValueError("No averaged_surface.tiff file found")
         self.temp_dir = job_settings.temp_dir
@@ -1391,7 +1391,7 @@ class TiffSplitterCLI:
         files_to_record.append(surface_path)
 
         zstack_path_list = []
-        for zstack in self.storage_path.glob("*local_z*.tiff"):
+        for zstack in self.input_dir.glob("*local_z*.tiff"):
             zstack_path = zstack
             zstack_path_list.append(zstack_path)
             files_to_record.append(zstack_path)
@@ -1408,7 +1408,7 @@ class TiffSplitterCLI:
         # having to modify the ruby strategy associated with this
         # queue, which is out of scope for the work we have
         # currently committed to.
-        if self.storage_path.glob("*cortical_z_stack*.tiff"):
+        if next(self.input_dir.glob("*cortical_z_stack*.tiff"), None):
             msg = "'column_z_stack_tif' detected in 'plane_groups'; "
             msg += "the TIFF splitting code no longer handles that file."
             logging.warning(msg)
@@ -1427,7 +1427,7 @@ class TiffSplitterCLI:
             if data_stream.get("ophys_fovs"):
                 for fov in data_stream["ophys_fovs"]:
                     this_exp_metadata = dict()
-                    fov_id = f'{fov["targeted_structure"]}_{fov["index"]}'
+                    fov_id = fov["targeted_structure"] + "_" + str(fov["index"])
                     this_exp_metadata["fov"] = fov_id
                     for file_key in ("timeseries", "depth_2p", "surface_2p", "local_z_stack"):
                         this_metadata = dict()
@@ -1440,6 +1440,7 @@ class TiffSplitterCLI:
                             this_metadata[data_key] = fov[data_key]
                         this_exp_metadata[file_key] = this_metadata
 
+                    fov_directory = self.input_dir
                     roi_index = fov["scanimage_roi_index"]
                     scanfield_z = fov["scanfield_z"]
                     baseline_center = None
@@ -1454,7 +1455,7 @@ class TiffSplitterCLI:
                         ),
                         ("depth_2p", "surface_2p", "local_z_stack"),
                     ):
-                        output_dir = self.output_dir / fov_id
+                        output_dir = self.output_dir / str(fov_id)
                         if not output_dir.is_dir():
                             output_dir.mkdir()
                         output_path = output_dir / output_name
@@ -1504,9 +1505,8 @@ class TiffSplitterCLI:
                     fov_id = f'{fov["targeted_structure"]}_{fov["index"]}'
                     scanfield_z = fov["scanfield_z"]
                     roi_index = fov["scanimage_roi_index"]
-                    fov_directory = self.output_dir
                     fname = f"{fov_id}.h5"
-                    output_path = fov_directory / fov_id / fname
+                    output_path = self.output_dir / fov_id / fname
                     output_path_lookup[(roi_index, scanfield_z)] = output_path
 
                     frame_shape = timeseries_splitter.frame_shape(i_roi=roi_index, z_value=scanfield_z)
@@ -1537,11 +1537,11 @@ class TiffSplitterCLI:
 
         # TODO: why not just search for the file in the storage_path?
         # full_field_path = get_full_field_path(runner_args=self.args, logger=logging)
-        full_field_path = self.storage_path.glob("*fullfield*.tiff")
+        full_field_path = next(self.input_dir.glob("*fullfield*.tiff"), None)
 
         if full_field_path is not None:
             avg_path = self.surface_tif
-            output_dir = self.storage_path
+            output_dir = self.output_dir
 
             output_name = "stitched_full_field_img.h5"
             output_path = output_dir / output_name
@@ -1584,8 +1584,8 @@ class TiffSplitterCLI:
 
         parser = argparse.ArgumentParser()
         parser.add_argument(
-            "-d",
-            "--data-dir",
+            "-i",
+            "--input-dir",
             required=True,
             type=str,
             help=(
@@ -1609,18 +1609,18 @@ class TiffSplitterCLI:
         parser.add_argument(
             "-o",
             "--output-dir",
-            required=True,
+            required=False,
             default=None,
             type=str,
             help=(
                 """
-                temp-directory for job settings
+                output-directory for job settings
                 """
             ),
         )
         job_args = parser.parse_args(args)
         job_settings=JobSettings(
-            storage_path=job_args.data_dir,
+            input_dir=job_args.input_dir,
             temp_dir=job_args.temp_dir,
             output_dir=job_args.output_dir
         )
@@ -1633,3 +1633,9 @@ if __name__ == "__main__":
     sys_args = sys.argv[1:]
     runner = TiffSplitterCLI.from_args(sys_args)
     runner.run_job()
+
+
+
+# if __name__ == "__main__":
+#     runner = TiffSplitterCLI(r"D:\data\1330132892", temp_dir="D:/tmp")
+#     runner.run_job()

@@ -40,7 +40,7 @@ def write_out_stitched_full_field_image(
     not fail so that the ophys session can continue to be
     processed in LIMS
     """
-    from mesoscope_file_splitter.splitter import AvgImageTiffSplitter
+    from run_capsule import AvgImageTiffSplitter
 
     try:
         full_field_metadata = ScanImageMetadata(path_to_full_field_tiff)
