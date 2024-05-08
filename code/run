@@ -2,7 +2,7 @@
 set -ex
 
 ROOT_DIR="../data"
-
+ls
 # Find the subdirectory
 SUB_DIR=$(find "$ROOT_DIR" -type d -name "ophys")
 
