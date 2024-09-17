@@ -4,7 +4,7 @@ set -ex
 ROOT_DIR="../data"
 ls
 # Find the subdirectory
-SUB_DIR=$(find "$ROOT_DIR" -type d -name "ophys")
+SUB_DIR=$(find "$ROOT_DIR" -type d -name "pophys")
 
 # Check if subdirectory exists
 if [ -z "$SUB_DIR" ]; then

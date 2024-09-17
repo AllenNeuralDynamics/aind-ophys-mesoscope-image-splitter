@@ -69,6 +69,7 @@ def split_timeseries_tiff(
     dump_every: int = 1000,
     logger: Optional[callable] = None,
     metadata: Optional[dict] = None,
+    debug: Optional[bool] = False
 ) -> None:
     """
     Split a timeseries TIFF containing multiple mesoscope
@@ -149,6 +150,8 @@ def split_timeseries_tiff(
         offset_to_tmp_files[offset] = []
 
     try:
+        print(f"~~~~~~~~~~~~~~~~OFFSET, {offset}")
+        print(f"~~~~~~~~~~~~~~~~TIFF PATH, {tiff_path}")
         _split_timeseries_tiff(
             tiff_path=tiff_path,
             offset_to_path=offset_to_path,
@@ -157,6 +160,7 @@ def split_timeseries_tiff(
             dump_every=dump_every,
             logger=logger,
             metadata=metadata,
+            debug=debug
         )
     finally:
         for offset in offset_to_tmp_files:
@@ -178,6 +182,7 @@ def _split_timeseries_tiff(
     dump_every: int = 1000,
     logger: Optional[callable] = None,
     metadata: Optional[dict] = None,
+    debug: Optional[bool] = False
 ) -> None:
     """
     Method to do the work behind split_timeseries_tiff
@@ -565,7 +570,6 @@ class TiffSplitterBase(IntFromZMapperMixin):
             )
 
         z_value_array = self._metadata.all_zs()
-
         # check that z_value_array is a list of lists
         if not isinstance(z_value_array, list):
             msg = "Unclear how to split this TIFF\n"
@@ -644,13 +648,11 @@ class TiffSplitterBase(IntFromZMapperMixin):
                     for zz in z_value_array[offset : offset + n_z_per_roi]
                 ]
             )
-
             if these_z_ints != roi_z_ints:
                 msg += "z_values from sub array "
                 msg += "not in correct order for ROIs; "
                 break
             offset += n_z_per_roi
-
         if len(msg) > 0:
             full_msg = "Unclear how to split this TIFF\n"
             full_msg += f"{self._file_path.resolve().absolute()}\n"
@@ -970,6 +972,7 @@ class TimeSeriesSplitter(TiffSplitterBase):
         tmp_dir: Optional[Path] = None,
         dump_every: int = 1000,
         logger: Optional[callable] = None,
+        debug: Optional[bool] = False
     ) -> None:
         """
         Write all of the pages associated with an
@@ -1078,6 +1081,7 @@ class TimeSeriesSplitter(TiffSplitterBase):
             dump_every=dump_every,
             logger=logger,
             metadata=self.raw_metadata,
+            debug=debug
         )
 
         return None
@@ -1347,8 +1351,16 @@ class JobSettings(BaseModel):
     input_dir: Union[Path, str] = Field(description="directory where tiff files are found")
     temp_dir: Optional[Path]
     output_dir: Union[Path, str] = Field(description="where to save fovs")
+    debug: Optional[bool] = Field(default=False, description="clip movie - run in debug")
 
 class TiffSplitterCLI:
+    @staticmethod
+    def str2bool(value):
+        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+            return True
+        else:
+            return False
+
     # def __init__(self, storage_path: Union[Path, str], temp_dir: Optional[Union[Path, str]] = None):
     def __init__(self, job_settings: JobSettings):
         self.input_dir = job_settings.input_dir
@@ -1372,6 +1384,7 @@ class TiffSplitterCLI:
         if not self.surface_tif:
             raise ValueError("No averaged_surface.tiff file found")
         self.temp_dir = job_settings.temp_dir
+        self.debug = job_settings.debug
 
     def run_job(self):
         t0 = time.time()
@@ -1385,7 +1398,6 @@ class TiffSplitterCLI:
         depth_path = Path(self.depths_tif)
         depth_splitter = AvgImageTiffSplitter(tiff_path=depth_path)
         files_to_record.append(depth_path)
-
         surface_path = Path(self.surface_tif)
         surface_splitter = AvgImageTiffSplitter(tiff_path=surface_path)
         files_to_record.append(surface_path)
@@ -1523,6 +1535,7 @@ class TiffSplitterCLI:
             tmp_dir=self.temp_dir,
             dump_every=self.session_data.get("dump_every", 1000),
             logger=logging,
+            debug=self.debug
         )
 
         output["experiment_output"] = experiment_metadata
@@ -1618,11 +1631,22 @@ class TiffSplitterCLI:
                 """
             ),
         )
+        parser.add_argument(
+                "-d",
+                "--debug",
+                required=False,
+                default=False,
+                type=cls.str2bool,
+                help="run in debug"
+        )
+
         job_args = parser.parse_args(args)
+        # debug = str2bool(job_args.debug)
         job_settings=JobSettings(
             input_dir=job_args.input_dir,
             temp_dir=job_args.temp_dir,
-            output_dir=job_args.output_dir
+            output_dir=job_args.output_dir,
+            debug=job_args.debug
         )
         return cls(
             job_settings=job_settings,
