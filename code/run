@@ -2,9 +2,14 @@
 set -ex
 
 ROOT_DIR="../data"
-ls
 # Find the subdirectory
-SUB_DIR=$(find "$ROOT_DIR" -type d -name "pophys")
+ROOT_DIR="../data"
+SUB_DIR=()
+for dir in "$ROOT_DIR"/*/*phys; do
+    if [ -d "$dir" ]; then
+        SUB_DIR+=("$dir")
+    fi
+done
 
 # Check if subdirectory exists
 if [ -z "$SUB_DIR" ]; then
@@ -13,4 +18,4 @@ if [ -z "$SUB_DIR" ]; then
 fi
 
 echo $SUB_DIR
-python -u run_capsule.py --input-dir $SUB_DIR --temp ../scratch --output-dir ../results
+#python -u run_capsule.py --input-dir $SUB_DIR --temp ../scratch --output-dir ../results
