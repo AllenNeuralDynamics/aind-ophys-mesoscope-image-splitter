@@ -11,11 +11,5 @@ for dir in "$ROOT_DIR"/*/*phys; do
     fi
 done
 
-# Check if subdirectory exists
-if [ -z "$SUB_DIR" ]; then
-    echo "Subdirectory not found in $ROOT_DIR"
-    exit 1
-fi
-
 echo $SUB_DIR
 python -u run_capsule.py --input-dir $SUB_DIR --temp ../scratch --output-dir ../results
