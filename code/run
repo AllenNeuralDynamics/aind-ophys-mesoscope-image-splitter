@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -ex
+ls ../data
 
 ROOT_DIR="../data"
 SUB_DIRS=$(find "$ROOT_DIR" -type d \( -name "pophys" -o -name "ophys" \))
