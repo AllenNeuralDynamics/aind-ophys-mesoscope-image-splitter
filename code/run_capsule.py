@@ -19,7 +19,6 @@ from aind_ophys_utils.array_utils import normalize_array
 from tiff_metadata import ScanImageMetadata
 from full_field_utils import (
     write_out_stitched_full_field_image,
-    get_full_field_path,
 )
 
 
