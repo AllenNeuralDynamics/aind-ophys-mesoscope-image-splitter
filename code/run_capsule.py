@@ -1645,79 +1645,76 @@ class TiffSplitterCLI:
         duration = time.time() - t0
         logging.info(f"that took {duration:.2e} seconds")
 
-    @classmethod
-    def from_args(cls, args: list):
-        """
-        Adds ability to construct settings from a list of arguments.
-        Parameters
-        ----------
-        args : list
-        A list of command line arguments to parse.
-        """
+def from_args(args: list):
+    """
+    Adds ability to construct settings from a list of arguments.
+    Parameters
+    ----------
+    args : list
+    A list of command line arguments to parse.
+    """
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "-i",
-            "--input-dir",
-            required=True,
-            type=str,
-            help=(
-                """
-                data-directory for job settings
-                """
-            ),
-        )
-        parser.add_argument(
-            "-t",
-            "--temp-dir",
-            required=False,
-            default=None,
-            type=str,
-            help=(
-                """
-                temp-directory for job settings
-                """
-            ),
-        )
-        parser.add_argument(
-            "-o",
-            "--output-dir",
-            required=False,
-            default=None,
-            type=str,
-            help=(
-                """
-                output-directory for job settings
-                """
-            ),
-        )
-        parser.add_argument(
-            "-d",
-            "--debug",
-            required=False,
-            default=False,
-            type=cls.str2bool,
-            help="run in debug",
-        )
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-i",
+        "--input-dir",
+        required=True,
+        type=str,
+        help=(
+            """
+            data-directory for job settings
+            """
+        ),
+    )
+    parser.add_argument(
+        "-t",
+        "--temp-dir",
+        required=False,
+        default=None,
+        type=str,
+        help=(
+            """
+            temp-directory for job settings
+            """
+        ),
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        required=False,
+        default=None,
+        type=str,
+        help=(
+            """
+            output-directory for job settings
+            """
+        ),
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        required=False,
+        default=False,
+        type=cls.str2bool,
+        help="run in debug",
+    )
 
-        job_args = parser.parse_args(args)
-        # debug = str2bool(job_args.debug)
-        job_settings = JobSettings(
-            input_dir=job_args.input_dir,
-            temp_dir=job_args.temp_dir,
-            output_dir=job_args.output_dir,
-            debug=job_args.debug,
-        )
-        return cls(
-            job_settings=job_settings,
-        )
+    job_args = parser.parse_args(args)
+    # debug = str2bool(job_args.debug)
+    return JobSettings(
+        input_dir=job_args.input_dir,
+        temp_dir=job_args.temp_dir,
+        output_dir=job_args.output_dir,
+        debug=job_args.debug,
+    )
 
 
 if __name__ == "__main__":
     sys_args = sys.argv[1:]
-    runner = TiffSplitterCLI.from_args(sys_args)
+    runner = from_args(sys_args)
     split_directories = find_split_directories(Path(runner.input_dir))
     if len(split_directories) == 0:
+        runner = TiffSplitterCLI(runner)
         runner.run_job()
     else:
         output_dir = Path(runner.output_dir)
