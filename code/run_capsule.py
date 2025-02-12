@@ -1716,19 +1716,15 @@ class TiffSplitterCLI:
 if __name__ == "__main__":
     sys_args = sys.argv[1:]
     runner = TiffSplitterCLI.from_args(sys_args)
-    split_files = find_split_directories(Path(runner.input_dir))
-    if len(split_files) == 0:
+    split_directories = find_split_directories(Path(runner.input_dir))
+    if len(split_directories) == 0:
         runner.run_job()
     else:
         output_dir = Path(runner.output_dir)
-        for split_file in split_files:
+        for split_dir in split_directories:
+            split_file = split_dir / f"{split_dir.name}.h5"
             new_directory = output_dir / split_file.name
             new_directory.mkdir(parents=True, exist_ok=True)
-            with open(new_directory / split_file.name, "w") as f:
+            with open(new_directory / f"{split_dir.name}.txt", "w") as f:
                 f.write(str(split_file))
     runner.run_job()
-
-
-# if __name__ == "__main__":
-#     runner = TiffSplitterCLI(r"D:\data\1330132892", temp_dir="D:/tmp")
-#     runner.run_job()
