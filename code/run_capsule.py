@@ -37,7 +37,7 @@ def find_split_directories(directory: Path) -> List[Path]:
     pattern = re.compile(r"^V.*\d+$")
 
     matching_dirs = [
-        d for d in directory.iterdir() if d.is_dir() and pattern.match(d.name)
+        d.name for d in directory.iterdir() if d.is_dir() and pattern.match(d.name)
     ]
     return matching_dirs
 
@@ -1721,8 +1721,7 @@ if __name__ == "__main__":
         output_dir = Path(runner.output_dir)
         for split_dir in split_directories:
             split_file = split_dir / f"{split_dir.name}.h5"
-            new_directory = output_dir / split_file.name
+            new_directory = output_dir / split_dir
             new_directory.mkdir(parents=True, exist_ok=True)
             with open(new_directory / f"{split_dir.name}.txt", "w") as f:
-                f.write(str(split_file))
-    runner.run_job()
+                f.write(str(split_file.name))
