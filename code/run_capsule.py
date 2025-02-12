@@ -1404,7 +1404,7 @@ class JobSettings(BaseModel):
 
 class TiffSplitterCLI:
     @staticmethod
-    def str2bool(value):
+    def str2bool(v):
         if v.lower() in ("yes", "true", "t", "y", "1"):
             return True
         else:
@@ -1695,7 +1695,7 @@ def from_args(args: list):
         "--debug",
         required=False,
         default=False,
-        type=cls.str2bool,
+        type=TiffSplitterCLI.str2bool,
         help="run in debug",
     )
 
