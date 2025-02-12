@@ -1713,7 +1713,6 @@ if __name__ == "__main__":
     sys_args = sys.argv[1:]
     runner = from_args(sys_args)
     split_directories = find_split_directories(Path(runner.input_dir))
-    print(f"~~~~~~~~~~~~~{split_directories}")
     if len(split_directories) == 0:
         runner = TiffSplitterCLI(runner)
         runner.run_job()
