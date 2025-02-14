@@ -1,26 +1,45 @@
-from typing import List, Tuple, Optional, Dict, Union
-import tifffile
-import numpy as np
-import h5py as h5
-import sys
-import json
-import os
-import time
-import logging
-from pathlib import Path
-import shutil
-import tempfile
-import datetime
 import argparse
-from pydantic import Field, BaseModel
+import datetime
+import json
+import logging
+import os
+import re
+import shutil
+import sys
+import tempfile
+import time
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Union
 
-
+import h5py as h5
+import numpy as np
+import tifffile
 from aind_ophys_utils.array_utils import normalize_array
+from full_field_utils import write_out_stitched_full_field_image
+from pydantic import BaseModel, Field
 from tiff_metadata import ScanImageMetadata
-from full_field_utils import (
-    write_out_stitched_full_field_image,
-    get_full_field_path,
-)
+
+
+def find_split_directories(directory: Path) -> List[Path]:
+    """Determine if there are any V* directories in the specified directory.
+
+    Parameters
+    ----------
+    directory: Path
+        The directory to search for V* directories.
+
+    Returns
+    -------
+    List[Path]
+        A list of Path objects representing the V* directories found in the specified directory.
+    """
+    # Search for directories of the pattern V*_[0-9]
+    pattern = re.compile(r"^V.*\d+$")
+
+    matching_dirs = [
+        d.name for d in directory.iterdir() if d.is_dir() and pattern.match(d.name)
+    ]
+    return matching_dirs
 
 
 def mkstemp_clean(
@@ -69,7 +88,7 @@ def split_timeseries_tiff(
     dump_every: int = 1000,
     logger: Optional[callable] = None,
     metadata: Optional[dict] = None,
-    debug: Optional[bool] = False
+    debug: Optional[bool] = False,
 ) -> None:
     """
     Split a timeseries TIFF containing multiple mesoscope
@@ -128,7 +147,9 @@ def split_timeseries_tiff(
     # catastrophic failure we will know what the directory
     # was for.
     now = datetime.datetime.now()
-    timestamp = f"{now.year}_{now.month}_" f"{now.day}_{now.hour}_" f"{now.minute}_{now.second}"
+    timestamp = (
+        f"{now.year}_{now.month}_" f"{now.day}_{now.hour}_" f"{now.minute}_{now.second}"
+    )
 
     tmp_prefix = f"mesoscope_timeseries_tmp_{timestamp}_"
     directories_to_clean = []
@@ -160,7 +181,7 @@ def split_timeseries_tiff(
             dump_every=dump_every,
             logger=logger,
             metadata=metadata,
-            debug=debug
+            debug=debug,
         )
     finally:
         for offset in offset_to_tmp_files:
@@ -182,7 +203,7 @@ def _split_timeseries_tiff(
     dump_every: int = 1000,
     logger: Optional[callable] = None,
     metadata: Optional[dict] = None,
-    debug: Optional[bool] = False
+    debug: Optional[bool] = False,
 ) -> None:
     """
     Method to do the work behind split_timeseries_tiff
@@ -246,7 +267,9 @@ def _split_timeseries_tiff(
                 fov_shape = arr.shape
                 video_dtype = arr.dtype
                 for offset in offset_to_path:
-                    cache = np.zeros((dump_every, fov_shape[0], fov_shape[1]), dtype=video_dtype)
+                    cache = np.zeros(
+                        (dump_every, fov_shape[0], fov_shape[1]), dtype=video_dtype
+                    )
                     offset_to_cache[offset] = cache
 
             current_offset += 1
@@ -352,7 +375,9 @@ def _gather_timeseries_caches(
                 video_dtype = in_file["data"].dtype
             else:
                 if fov_shape != this_fov_shape:
-                    raise RuntimeError("Inconsistent FOV shape\n" f"{fov_shape}\n{this_fov_shape}")
+                    raise RuntimeError(
+                        "Inconsistent FOV shape\n" f"{fov_shape}\n{this_fov_shape}"
+                    )
 
     # apparently, HDF5 chunks sizes must be less than 4 GB;
     # figure out how many frames fit in 3GB (just in case)
@@ -919,7 +944,9 @@ class AvgImageTiffSplitter(TiffSplitterBase):
 
         return np.copy(self._avg_img_cache[pair])
 
-    def write_output_file(self, i_roi: int, z_value: Optional[float], output_path: Path) -> None:
+    def write_output_file(
+        self, i_roi: int, z_value: Optional[float], output_path: Path
+    ) -> None:
         """
         Write the image created by averaging all of the TIFF
         pages associated with an (i_roi, z_value) pair to a TIFF
@@ -972,7 +999,7 @@ class TimeSeriesSplitter(TiffSplitterBase):
         tmp_dir: Optional[Path] = None,
         dump_every: int = 1000,
         logger: Optional[callable] = None,
-        debug: Optional[bool] = False
+        debug: Optional[bool] = False,
     ) -> None:
         """
         Write all of the pages associated with an
@@ -1071,7 +1098,9 @@ class TimeSeriesSplitter(TiffSplitterBase):
             z_value = key_pair[1]
             offset = self._get_offset(i_roi=i_roi, z_value=z_value)
             if offset in offset_to_path:
-                raise RuntimeError("Same offset occurs twice when splitting " f"{self._file_path}")
+                raise RuntimeError(
+                    "Same offset occurs twice when splitting " f"{self._file_path}"
+                )
             offset_to_path[offset] = output_path_map[key_pair]
 
         split_timeseries_tiff(
@@ -1081,7 +1110,7 @@ class TimeSeriesSplitter(TiffSplitterBase):
             dump_every=dump_every,
             logger=logger,
             metadata=self.raw_metadata,
-            debug=debug
+            debug=debug,
         )
 
         return None
@@ -1136,12 +1165,16 @@ class ZStackSplitter(IntFromZMapperMixin):
                 if roi["discretePlaneMode"] == 0:
                     if this_roi is not None:
                         raise RuntimeError(
-                            "More than one ROI has " "discretePlaneMode==0 for " "{tiff_path}"
+                            "More than one ROI has "
+                            "discretePlaneMode==0 for "
+                            "{tiff_path}"
                         )
                     this_roi = i_roi
 
             if this_roi is None:
-                raise RuntimeError("Could not find discretePlaneMode==0 for " f"{tiff_path}")
+                raise RuntimeError(
+                    "Could not find discretePlaneMode==0 for " f"{tiff_path}"
+                )
 
             if this_roi not in roi_to_path:
                 roi_to_path[this_roi] = []
@@ -1149,7 +1182,9 @@ class ZStackSplitter(IntFromZMapperMixin):
 
             z_array = np.array(metadata.all_zs())
             if z_array.shape[1] != 2:
-                raise RuntimeError(f"z_array for {tiff_path} has odd shape\n" f"{z_array}")
+                raise RuntimeError(
+                    f"z_array for {tiff_path} has odd shape\n" f"{z_array}"
+                )
 
             z_mean = z_array.mean(axis=0)
             for ii, z_value in enumerate(z_mean):
@@ -1206,7 +1241,9 @@ class ZStackSplitter(IntFromZMapperMixin):
         baseline_center = possible_center[0]
         for ii in range(1, len(possible_center)):
             center = possible_center[ii]
-            dsq = (center[0] - baseline_center[0]) ** 2 + (center[1] - baseline_center[1]) ** 2
+            dsq = (center[0] - baseline_center[0]) ** 2 + (
+                center[1] - baseline_center[1]
+            ) ** 2
             if dsq > center_tol:
                 msg = "Cannot find consistent center for ROI "
                 msg += f"{i_roi}"
@@ -1250,7 +1287,9 @@ class ZStackSplitter(IntFromZMapperMixin):
         n_pages = self._path_to_pages[tiff_path]
         baseline_shape = self.frame_shape(i_roi=i_roi, z_value=z_value)
         with tifffile.TiffFile(tiff_path, mode="rb") as tiff_file:
-            data = [tiff_file.pages[i_page].asarray() for i_page in range(z_index, n_pages, 2)]
+            data = [
+                tiff_file.pages[i_page].asarray() for i_page in range(z_index, n_pages, 2)
+            ]
 
         for this_page in data:
             if this_page.shape != baseline_shape:
@@ -1294,12 +1333,18 @@ class ZStackSplitter(IntFromZMapperMixin):
         ].raw_metadata
 
         with h5.File(output_path, "w") as out_file:
-            out_file.create_dataset("scanimage_metadata", data=json.dumps(metadata).encode("utf-8"))
+            out_file.create_dataset(
+                "scanimage_metadata", data=json.dumps(metadata).encode("utf-8")
+            )
 
-            out_file.create_dataset("data", data=data, chunks=(1, data.shape[1], data.shape[2]))
+            out_file.create_dataset(
+                "data", data=data, chunks=(1, data.shape[1], data.shape[2])
+            )
 
 
-def get_valid_roi_centers(timeseries_splitter: TimeSeriesSplitter) -> List[Tuple[float, float]]:
+def get_valid_roi_centers(
+    timeseries_splitter: TimeSeriesSplitter,
+) -> List[Tuple[float, float]]:
     """
     Return a list of all of the valid ROI centers taken from a
     TimeSeriesSplitter
@@ -1345,18 +1390,22 @@ def get_nearest_roi_center(
 
     return ans
 
+
 class JobSettings(BaseModel):
     """Job settings values."""
 
-    input_dir: Union[Path, str] = Field(description="directory where tiff files are found")
+    input_dir: Union[Path, str] = Field(
+        description="directory where tiff files are found"
+    )
     temp_dir: Optional[Path]
     output_dir: Union[Path, str] = Field(description="where to save fovs")
     debug: Optional[bool] = Field(default=False, description="clip movie - run in debug")
 
+
 class TiffSplitterCLI:
     @staticmethod
-    def str2bool(value):
-        if v.lower() in ('yes', 'true', 't', 'y', '1'):
+    def str2bool(v):
+        if v.lower() in ("yes", "true", "t", "y", "1"):
             return True
         else:
             return False
@@ -1441,7 +1490,12 @@ class TiffSplitterCLI:
                     this_exp_metadata = dict()
                     fov_id = fov["targeted_structure"] + "_" + str(fov["index"])
                     this_exp_metadata["fov"] = fov_id
-                    for file_key in ("timeseries", "depth_2p", "surface_2p", "local_z_stack"):
+                    for file_key in (
+                        "timeseries",
+                        "depth_2p",
+                        "surface_2p",
+                        "local_z_stack",
+                    ):
                         this_metadata = dict()
                         for data_key in (
                             "fov_coordinate_ml",
@@ -1473,7 +1527,8 @@ class TiffSplitterCLI:
                         output_path = output_dir / output_name
                         roi_center = splitter.roi_center(i_roi=roi_index)
                         nearest_valid = get_nearest_roi_center(
-                            this_roi_center=roi_center, valid_roi_centers=valid_roi_centers
+                            this_roi_center=roi_center,
+                            valid_roi_centers=valid_roi_centers,
                         )
                         if baseline_center is None:
                             baseline_center = nearest_valid
@@ -1492,7 +1547,9 @@ class TiffSplitterCLI:
                         )
                         str_path = str(output_path.resolve().absolute())
                         this_exp_metadata[metadata_tag]["filename"] = str_path
-                        frame_shape = splitter.frame_shape(i_roi=roi_index, z_value=z_value)
+                        frame_shape = splitter.frame_shape(
+                            i_roi=roi_index, z_value=z_value
+                        )
                         this_exp_metadata[metadata_tag]["height"] = frame_shape[0]
                         this_exp_metadata[metadata_tag]["width"] = frame_shape[1]
 
@@ -1521,7 +1578,9 @@ class TiffSplitterCLI:
                     output_path = self.output_dir / fov_id / fname
                     output_path_lookup[(roi_index, scanfield_z)] = output_path
 
-                    frame_shape = timeseries_splitter.frame_shape(i_roi=roi_index, z_value=scanfield_z)
+                    frame_shape = timeseries_splitter.frame_shape(
+                        i_roi=roi_index, z_value=scanfield_z
+                    )
 
                     str_path = str(output_path.resolve().absolute())
 
@@ -1535,7 +1594,7 @@ class TiffSplitterCLI:
             tmp_dir=self.temp_dir,
             dump_every=self.session_data.get("dump_every", 1000),
             logger=logging,
-            debug=self.debug
+            debug=self.debug,
         )
 
         output["experiment_output"] = experiment_metadata
@@ -1563,12 +1622,13 @@ class TiffSplitterCLI:
             write_out_stitched_full_field_image(
                 path_to_avg_tiff=Path(avg_path),
                 path_to_full_field_tiff=full_field_path,
-                output_path=output_path
+                output_path=output_path,
             )
 
             if output_path.is_file():
                 logging.info(
-                    "Wrote full field stitched image to " f"{output_path.resolve().absolute()}"
+                    "Wrote full field stitched image to "
+                    f"{output_path.resolve().absolute()}"
                 )
 
         # record file metadata
@@ -1585,81 +1645,81 @@ class TiffSplitterCLI:
         duration = time.time() - t0
         logging.info(f"that took {duration:.2e} seconds")
 
-    @classmethod
-    def from_args(cls, args: list):
-        """
-        Adds ability to construct settings from a list of arguments.
-        Parameters
-        ----------
-        args : list
-        A list of command line arguments to parse.
-        """
+def from_args(args: list):
+    """
+    Adds ability to construct settings from a list of arguments.
+    Parameters
+    ----------
+    args : list
+    A list of command line arguments to parse.
+    """
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "-i",
-            "--input-dir",
-            required=True,
-            type=str,
-            help=(
-                """
-                data-directory for job settings
-                """
-            ),
-        )
-        parser.add_argument(
-            "-t",
-            "--temp-dir",
-            required=False,
-            default=None,
-            type=str,
-            help=(
-                """
-                temp-directory for job settings
-                """
-            ),
-        )
-        parser.add_argument(
-            "-o",
-            "--output-dir",
-            required=False,
-            default=None,
-            type=str,
-            help=(
-                """
-                output-directory for job settings
-                """
-            ),
-        )
-        parser.add_argument(
-                "-d",
-                "--debug",
-                required=False,
-                default=False,
-                type=cls.str2bool,
-                help="run in debug"
-        )
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-i",
+        "--input-dir",
+        required=True,
+        type=str,
+        help=(
+            """
+            data-directory for job settings
+            """
+        ),
+    )
+    parser.add_argument(
+        "-t",
+        "--temp-dir",
+        required=False,
+        default=None,
+        type=str,
+        help=(
+            """
+            temp-directory for job settings
+            """
+        ),
+    )
+    parser.add_argument(
+        "-o",
+        "--output-dir",
+        required=False,
+        default=None,
+        type=str,
+        help=(
+            """
+            output-directory for job settings
+            """
+        ),
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        required=False,
+        default=False,
+        type=TiffSplitterCLI.str2bool,
+        help="run in debug",
+    )
 
-        job_args = parser.parse_args(args)
-        # debug = str2bool(job_args.debug)
-        job_settings=JobSettings(
-            input_dir=job_args.input_dir,
-            temp_dir=job_args.temp_dir,
-            output_dir=job_args.output_dir,
-            debug=job_args.debug
-        )
-        return cls(
-            job_settings=job_settings,
-        )
+    job_args = parser.parse_args(args)
+    # debug = str2bool(job_args.debug)
+    return JobSettings(
+        input_dir=job_args.input_dir,
+        temp_dir=job_args.temp_dir,
+        output_dir=job_args.output_dir,
+        debug=job_args.debug,
+    )
 
 
 if __name__ == "__main__":
     sys_args = sys.argv[1:]
-    runner = TiffSplitterCLI.from_args(sys_args)
-    runner.run_job()
-
-
-
-# if __name__ == "__main__":
-#     runner = TiffSplitterCLI(r"D:\data\1330132892", temp_dir="D:/tmp")
-#     runner.run_job()
+    runner = from_args(sys_args)
+    split_directories = find_split_directories(Path(runner.input_dir))
+    if len(split_directories) == 0:
+        runner = TiffSplitterCLI(runner)
+        runner.run_job()
+    else:
+        output_dir = Path(runner.output_dir)
+        for split_dir in split_directories:
+            new_directory = output_dir / split_dir
+            new_directory.mkdir(parents=True, exist_ok=True)
+            with open(new_directory / f"{split_dir}.txt", "w") as f:
+                f.write(f"{split_dir}.h5")
